@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Türkiye Hava Durumu</title>
+    <!-- Tailwind CSS'i projeye dahil ediyoruz -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts'tan Inter fontunu kullanıyoruz -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Sayfanın genel fontunu belirliyoruz */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-size: cover;
+            background-position: center;
+            background-image: url('https://images.unsplash.com/photo-1499346030926-9a72daac6c63?q=80&w=2070&auto=format&fit=crop');
+        }
+        
+        /* Animasyon için spinner */
+        .loader {
+            border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 40px; height: 40px;
+            -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite;
+        }
+        @-webkit-keyframes spin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="flex items-center justify-center min-h-screen w-full h-full p-4 bg-black/25">
+        <div class="w-full max-w-7xl space-y-4">
+            <!-- Ana Form -->
+            <div class="bg-white/40 backdrop-blur-xl p-8 rounded-2xl shadow-2xl w-full border border-white/20 flex flex-col">
+                <div class="flex-grow flex flex-col md:flex-row gap-8">
+                    <!-- Sol Panel: Ana Bilgiler -->
+                    <div class="w-full md:w-1/4 flex flex-col justify-between">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">Türkiye Hava Durumu</h1>
+                            <p class="text-gray-700">Bir şehir seçin ve hava durumunu öğrenin.</p>
+                        </div>
+                        <!-- Şehir Seçim Alanı -->
+                        <div class="my-auto">
+                            <label for="cityDropdown" class="block mb-2 text-sm font-medium text-gray-900">Şehir Seçin</label>
+                            <select id="cityDropdown" class="bg-white/50 border border-white/30 text-gray-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 backdrop-blur-sm">
+                                <!-- Şehirler buraya JS ile eklenecek -->
+                            </select>
+                        </div>
+                         <!-- Buton -->
+                        <button id="getInfoBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            HAVA NASIL?
+                        </button>
+                    </div>
+
+                    <!-- Sağ Panel: Detaylı Bilgiler ve Grafikler -->
+                    <div id="weatherResult" class="w-full md:w-3/4">
+                        <!-- Hava durumu sonuçları buraya gelecek -->
+                    </div>
+                </div>
+            </div>
+            <!-- Saatlik Tahmin Paneli -->
+            <div id="hourlyForecastContainer" class="bg-white/40 backdrop-blur-xl p-4 rounded-2xl shadow-2xl w-full border border-white/20 hidden">
+                <!-- Saatlik tahmin buraya gelecek -->
+            </div>
+            <!-- Tavsiye Formu -->
+            <div id="adviceResult" class="bg-white/40 backdrop-blur-xl p-4 rounded-2xl shadow-2xl w-full border border-white/20 hidden">
+                 <!-- Tavsiyeler buraya gelecek -->
+            </div>
+        </div>
+    </div>
+
+    <!-- İmza Alanı -->
+    <div class="fixed bottom-4 right-4 text-sm text-white/70 font-light">
+        Created by İsmail
+    </div>
+
+    <script>
+        // --- API ANAHTARI (API KEY) ---
+        const weatherApiKey = "047c68cff08a43a3b48120742252907";
+
+        const cities = [
+            "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin", "Aydın", "Balıkesir",
+            "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli",
+            "Diyarbakır", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane",
+            "Hakkari", "Hatay", "Isparta", "Mersin", "İstanbul", "İzmir", "Kars", "Kastamonu", "Kayseri", "Kırklareli",
+            "Kırşehir", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Kahramanmaraş", "Mardin", "Muğla", "Muş",
+            "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas", "Tekirdağ", "Tokat",
+            "Trabzon", "Tunceli", "Şanlıurfa", "Uşak", "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman",
+            "Kırıkkale", "Batman", "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
+        ];
+        cities.sort((a, b) => a.localeCompare(b, 'tr'));
+
+        const cityDropdown = document.getElementById('cityDropdown');
+        const getInfoBtn = document.getElementById('getInfoBtn');
+        const weatherResult = document.getElementById('weatherResult');
+        const adviceResult = document.getElementById('adviceResult');
+        const hourlyForecastContainer = document.getElementById('hourlyForecastContainer');
+        
+        let fullForecastData = null; // Tüm tahmin verisini saklamak için
+
+        function populateCityDropdown() {
+            cities.forEach(city => {
+                const option = document.createElement('option');
+                option.value = city;
+                option.textContent = city;
+                cityDropdown.appendChild(option);
+            });
+        }
+
+        function showLoading(element) {
+            element.innerHTML = `<div class="flex items-center justify-center h-full"><div class="loader"></div></div>`;
+        }
+        
+        function showError(element, title, message) {
+             element.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg h-full flex flex-col justify-center"><strong class="font-bold">${title}</strong><span class="block sm:inline">${message}</span></div>`;
+        }
+        
+        function normalizeCityNameForAPI(city) {
+            return city.replace(/Ç/g, 'C').replace(/ç/g, 'c').replace(/Ğ/g, 'G').replace(/ğ/g, 'g').replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/Ö/g, 'O').replace(/ö/g, 'o').replace(/Ş/g, 'S').replace(/ş/g, 's').replace(/Ü/g, 'U').replace(/ü/g, 'u');
+        }
+
+        async function fetchWeather() {
+            if (weatherApiKey === "SENİN_WEATHERAPI_KEYİNİ_BURAYA_YAPIŞTIR" || weatherApiKey === "") {
+                showError(weatherResult, 'API Anahtarı Eksik!', 'Lütfen WeatherAPI.com API anahtarını koda ekleyin.');
+                return;
+            }
+            const city = cityDropdown.value;
+            showLoading(weatherResult);
+            adviceResult.classList.add('hidden');
+            hourlyForecastContainer.classList.add('hidden');
+
+            const normalizedCity = normalizeCityNameForAPI(city);
+            const apiUrl = `https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${normalizedCity}&days=4&aqi=yes&alerts=no&lang=tr`;
+            
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error.message || 'Veri alınamadı.');
+                }
+                const data = await response.json();
+                fullForecastData = data.forecast.forecastday; // Veriyi global değişkene kaydet
+                displayWeather(data, city);
+                displayAdvice(data);
+            } catch (error) {
+                console.error("Hava durumu hatası:", error);
+                showError(weatherResult, 'Hava Durumu Hatası', error.message);
+            }
+        }
+        
+        function getUvIndexBar(uv) {
+            const uvValue = parseFloat(uv);
+            let color = 'bg-green-500';
+            if (uvValue > 2) color = 'bg-yellow-500';
+            if (uvValue > 5) color = 'bg-orange-500';
+            if (uvValue > 7) color = 'bg-red-500';
+            if (uvValue > 10) color = 'bg-purple-500';
+            const width = Math.min((uvValue / 11) * 100, 100);
+            return `<div class="w-full bg-gray-200 rounded-full h-2.5"><div class="${color} h-2.5 rounded-full" style="width: ${width}%"></div></div>`;
+        }
+
+        function getAirQualityBar(index) {
+            const aqValue = parseInt(index);
+            let color = 'bg-green-500'; // İyi
+            if (aqValue === 2) color = 'bg-yellow-400'; // Orta
+            if (aqValue === 3) color = 'bg-orange-500'; // Hassas gruplar için sağlıksız
+            if (aqValue === 4) color = 'bg-red-500'; // Sağlıksız
+            if (aqValue >= 5) color = 'bg-purple-700'; // Çok sağlıksız / Tehlikeli
+            const width = (aqValue / 6) * 100;
+            return `<div class="w-full bg-gray-200 rounded-full h-2.5"><div class="${color} h-2.5 rounded-full" style="width: ${width}%"></div></div>`;
+        }
+
+        function getProgressBar(value) {
+             return `<div class="w-full bg-gray-200 rounded-full h-2.5"><div class="bg-blue-400 h-2.5 rounded-full" style="width: ${value}%"></div></div>`;
+        }
+
+        function getWindDetails(direction) {
+            const directions = { 'N': { turkce: 'Kuzey', derece: 0 }, 'NNE': { turkce: 'Kuzeydoğu', derece: 22.5 }, 'NE': { turkce: 'Kuzeydoğu', derece: 45 }, 'ENE': { turkce: 'Kuzeydoğu', derece: 67.5 }, 'E': { turkce: 'Doğu', derece: 90 }, 'ESE': { turkce: 'Güneydoğu', derece: 112.5 }, 'SE': { turkce: 'Güneydoğu', derece: 135 }, 'SSE': { turkce: 'Güneydoğu', derece: 157.5 }, 'S': { turkce: 'Güney', derece: 180 }, 'SSW': { turkce: 'Güneybatı', derece: 202.5 }, 'SW': { turkce: 'Güneybatı', derece: 225 }, 'WSW': { turkce: 'Güneybatı', derece: 247.5 }, 'W': { turkce: 'Batı', derece: 270 }, 'WNW': { turkce: 'Kuzeybatı', derece: 292.5 }, 'NW': { turkce: 'Kuzeybatı', derece: 315 }, 'NNW': { turkce: 'Kuzeybatı', derece: 337.5 } };
+            const details = directions[direction] || { turkce: direction, derece: 0 };
+            const arrow = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" class="inline-block ml-1" style="transform: rotate(${details.derece}deg);"><path fill="currentColor" d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"></path></svg>`;
+            return { turkce: details.turkce, arrow: arrow };
+        }
+
+        function getMoonPhaseInTurkish(englishPhase) {
+            const phases = {
+                'New Moon': 'Yeni Ay', 'Waxing Crescent': 'Hilal', 'First Quarter': 'İlk Dördün',
+                'Waxing Gibbous': 'Büyüyen Kambur Ay', 'Full Moon': 'Dolunay', 'Waning Gibbous': 'Küçülen Kambur Ay',
+                'Last Quarter': 'Son Dördün', 'Waning Crescent': 'Küçülen Hilal'
+            };
+            return phases[englishPhase] || englishPhase;
+        }
+
+        function formatDateToDayName(dateString) {
+            const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+            const date = new Date(dateString);
+            return days[date.getDay()];
+        }
+
+        function displayAdvice(data) {
+            const { current } = data;
+            const advices = [];
+            if (current.uv >= 8) { advices.push("☀️ UV indeksi çok yüksek. 10:00-16:00 arası dışarı çıkmaktan kaçının."); } 
+            else if (current.uv >= 6) { advices.push("☀️ Yüksek UV uyarısı! Güneş kreminizi sürmeyi unutmayın."); }
+            if (current.gust_kph > 40) { advices.push("💨 Ani ve kuvvetli rüzgar hamleleri bekleniyor, dikkatli olun."); } 
+            else if (current.wind_kph > 30) { advices.push("💨 Şiddetli rüzgar etkili. Dışarıdayken dikkatli olun."); }
+            if (current.precip_mm > 0.5) { advices.push("☔ Yağış bekleniyor. Şemsiyenizi yanınıza almayı unutmayın."); }
+            if (current.temp_c > 30) { advices.push("🥵 Hava bunaltıcı derecede sıcak. Bol su için."); } 
+            else if (current.temp_c < 5) { advices.push("🥶 Hava oldukça soğuk. Kat kat giyinin."); }
+            if (current.vis_km < 1) { advices.push("🌫️ Görüş mesafesi düşük. Trafikte dikkatli olun."); }
+            if (current.humidity > 85) { advices.push("💧 Yüksek nem bunaltıcı olabilir."); }
+            if (current.pressure_mb < 1005) { advices.push("📉 Alçak basınç, hava aniden değişebilir."); }
+            if (current.air_quality && current.air_quality['us-epa-index'] > 2) { advices.push("😷 Hava kalitesi hassas gruplar için düşük. Mümkünse dışarıda az zaman geçirin."); }
+            if (advices.length === 0) { advices.push("👍 Hava genel olarak sakin ve güzel görünüyor. Keyifli bir gün dileriz!"); }
+            adviceResult.innerHTML = `<div class="flex items-center gap-4"><span class="text-2xl">💡</span><p class="text-gray-700 font-medium">${advices.join(' ')}</p></div>`;
+            adviceResult.classList.remove('hidden');
+        }
+
+        function showHourlyForecast(dayIndex) {
+            if (!fullForecastData) return;
+            const dayData = fullForecastData[dayIndex];
+            let hourlyHtml = `<h4 class="font-bold text-gray-800 mb-2 text-center col-span-full">${formatDateToDayName(dayData.date)} Saatlik Tahmin</h4>`;
+            dayData.hour.forEach(hour => {
+                const time = hour.time.split(' ')[1];
+                const icon = `https:${hour.condition.icon}`;
+                hourlyHtml += `
+                    <div class="text-center bg-white/40 p-2 rounded-lg flex-shrink-0 w-24">
+                        <p class="font-semibold text-sm">${time}</p>
+                        <img src="${icon}" title="${hour.condition.text}" class="w-10 h-10 mx-auto">
+                        <p class="text-sm font-bold">${Math.round(hour.temp_c)}°C</p>
+                        <p class="text-xs text-gray-600">Hiss: ${Math.round(hour.feelslike_c)}°</p>
+                        <p class="text-xs text-blue-600">Yağmur: %${hour.chance_of_rain}</p>
+                    </div>
+                `;
+            });
+            hourlyForecastContainer.innerHTML = `<div class="flex gap-2 overflow-x-auto p-2">${hourlyHtml}</div>`;
+            hourlyForecastContainer.classList.remove('hidden');
+        }
+
+        function displayWeather(data, cityName) {
+            const iconUrl = `https:${data.current.condition.icon}`;
+            const wind = getWindDetails(data.current.wind_dir);
+            const todayAstro = data.forecast.forecastday[0].astro;
+            const airQuality = data.current.air_quality;
+            const moonPhaseTurkish = getMoonPhaseInTurkish(todayAstro.moon_phase);
+
+            let forecastHtml = '';
+            [1, 2, 3].forEach(i => {
+                const day = data.forecast.forecastday[i];
+                const dayName = formatDateToDayName(day.date);
+                const dayIcon = `https:${day.day.condition.icon}`;
+                forecastHtml += `<div class="bg-white/40 p-3 rounded-lg text-center flex-1 cursor-pointer hover:bg-white/60 transition-colors" onclick="showHourlyForecast(${i})">
+                        <p class="font-semibold text-sm">${dayName}</p>
+                        <img src="${dayIcon}" alt="${day.day.condition.text}" class="w-10 h-10 mx-auto">
+                        <p class="text-sm"><span class="font-bold">${Math.round(day.day.maxtemp_c)}°</span> / <span class="text-gray-600">${Math.round(day.day.mintemp_c)}°</span></p>
+                        <p class="text-xs text-blue-600 mt-1">Yağmur: %${day.day.daily_chance_of_rain}</p>
+                        <p class="text-xs text-gray-600">Rüzgar: ${Math.round(day.day.maxwind_kph)} km/s</p>
+                    </div>`;
+            });
+            
+            weatherResult.innerHTML = `
+                <div class="bg-blue-50/60 p-6 rounded-lg border border-white/30 h-full flex flex-col justify-between">
+                    <!-- Üst Kısım: Anlık ve Detaylar -->
+                    <div class="flex gap-6">
+                        <!-- Anlık Durum -->
+                        <div class="w-1/2">
+                            <div class="flex items-center justify-between mb-2">
+                                <div>
+                                    <h3 class="text-2xl font-bold text-gray-800">${cityName}, Türkiye</h3>
+                                    <p class="capitalize text-lg text-gray-600">${data.current.condition.text}</p>
+                                </div>
+                                <img src="${iconUrl}" alt="${data.current.condition.text}" class="w-20 h-20 -mt-4 -mr-2">
+                            </div>
+                            <div class="flex items-baseline">
+                                <p class="text-6xl font-bold text-gray-900">${Math.round(data.current.temp_c)}</p>
+                                <span class="text-2xl font-semibold text-gray-700">°C</span>
+                                <p class="ml-4 text-md text-gray-600">Hissedilen: ${Math.round(data.current.feelslike_c)}°C</p>
+                            </div>
+                            <div class="space-y-2 text-sm mt-4">
+                                <p><strong>Rüzgar:</strong> ${data.current.wind_kph} km/s (${wind.turkce} ${wind.arrow})</p>
+                                <p><strong>Yağış:</strong> ${data.current.precip_mm} mm</p>
+                                <p><strong>Görüş:</strong> ${data.current.vis_km} km</p>
+                            </div>
+                        </div>
+                        <!-- Diğer Detaylar ve Grafikler -->
+                        <div class="w-1/2 space-y-3 text-sm">
+                            <div><div class="flex justify-between"><span class="font-bold">UV İndeksi:</span><span>${data.current.uv}</span></div>${getUvIndexBar(data.current.uv)}</div>
+                            <div><div class="flex justify-between"><span class="font-bold">Hava Kalitesi (US EPA):</span><span>${airQuality['us-epa-index']}</span></div>${getAirQualityBar(airQuality['us-epa-index'])}</div>
+                            <div><div class="flex justify-between"><span class="font-bold">Nem:</span><span>%${data.current.humidity}</span></div>${getProgressBar(data.current.humidity)}</div>
+                            <div class="grid grid-cols-2 gap-x-2 text-xs pt-1">
+                                <p><strong>CO:</strong> ${airQuality.co.toFixed(1)}</p>
+                                <p><strong>O₃:</strong> ${airQuality.o3.toFixed(1)}</p>
+                                <p><strong>NO₂:</strong> ${airQuality.no2.toFixed(1)}</p>
+                                <p><strong>SO₂:</strong> ${airQuality.so2.toFixed(1)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Alt Kısım: Tahmin ve Astronomi -->
+                    <div class="mt-4 flex flex-col lg:flex-row gap-4">
+                        <div class="flex-1">
+                            <h4 class="font-bold text-gray-800 mb-2 text-center">3 Günlük Tahmin (Detay için tıklayın)</h4>
+                            <div class="flex gap-2">${forecastHtml}</div>
+                        </div>
+                        <div class="lg:w-1/3">
+                             <h4 class="font-bold text-gray-800 mb-2 text-center">Gök Olayları</h4>
+                             <div class="bg-white/40 p-3 rounded-lg text-xs text-gray-700 flex flex-col justify-center space-y-1">
+                                <p><strong>☀️ Gün Doğumu:</strong> ${todayAstro.sunrise}</p>
+                                <p><strong>🌅 Gün Batımı:</strong> ${todayAstro.sunset}</p>
+                                <p><strong>🌔 Ay Doğuşu:</strong> ${todayAstro.moonrise}</p>
+                                <p><strong>🌑 Ay Batışı:</strong> ${todayAstro.moonset}</p>
+                                <p><strong>🌙 Ay Evresi:</strong> ${moonPhaseTurkish}</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        getInfoBtn.addEventListener('click', fetchWeather);
+        populateCityDropdown();
+    </script>
+</body>
+</html>
